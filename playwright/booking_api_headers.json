@@ -1,0 +1,7 @@
+{
+  "url": "https://cyon-syd-v4-api-d1-03.azurewebsites.net",
+  "headers": {
+    "Authorization": "Bearer <REDACTED>",
+    "Accept": "application/json"
+  }
+}
