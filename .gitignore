@@ -213,5 +213,6 @@ __pycache__/
 *.pyc
 venv/
 .DS_Store
+jsons/friends.json
 
 logged_in.png

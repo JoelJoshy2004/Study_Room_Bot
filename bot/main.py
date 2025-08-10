@@ -11,6 +11,9 @@ from bot.session_check import token_is_fresh
 from bot.scraper import scrape_week
 from bot.calendar_render import render_week
 
+from bot.session_refresh import get_current_token, minutes_remaining_from_token, refresh_with_playwright
+
+
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # set in your environment
 
 intents = discord.Intents.default()
@@ -73,9 +76,40 @@ async def on_ready():
         print(f"Synced {len(synced)} app commands.")
     except Exception as e:
         print("App command sync failed:", e)
+
     print(f"Logged in as {bot.user} (id={bot.user.id})")
-    # Post startup status
+    # Start the refresher loop (don’t await forever)
+    bot.loop.create_task(refresher_loop())
     await post_startup_status()
+
+async def refresher_loop():
+    """
+    Every 15 minutes, check JWT time remaining. If < 30 min, attempt silent refresh
+    using Playwright. Notify once if refresh fails.
+    """
+    warned = False
+    while not bot.is_closed():
+        try:
+            token = get_current_token()
+            mins = minutes_remaining_from_token(token) if token else 0
+            # print status occasionally for visibility
+            print(f"[session] ~{mins} minutes remaining")
+
+            if mins < 30:
+                ok = await asyncio.to_thread(refresh_with_playwright)
+                if ok:
+                    print("[session] refreshed via Playwright")
+                    warned = False
+                else:
+                    if not warned:
+                        # Optional: you can post a warning to the bound channel here
+                        print("[session] refresh failed; will retry")
+                        warned = True
+            await asyncio.sleep(900)  # 15 minutes
+        except Exception as e:
+            print(f"[session] refresher error: {e}")
+            await asyncio.sleep(900)
+
 
 # ------------- Slash Commands -----------------
 
@@ -184,6 +218,21 @@ async def unbind(inter: discord.Interaction):
         return
     save_json(config.BIND_JSON, {"channel_id": None})
     await inter.response.send_message("✅ Unbound. The bot can reply in any channel now.")
+
+
+@bot.tree.command(name="refreshsession", description="Force a silent session refresh (headless)")
+async def refreshsession(inter: discord.Interaction):
+    if not assert_channel(inter): return
+    await inter.response.defer(ephemeral=True)
+    try:
+        ok = await asyncio.to_thread(refresh_with_playwright)
+        if ok:
+            await inter.followup.send("✅ Session refreshed.", ephemeral=True)
+        else:
+            await inter.followup.send("⚠️ Refresh attempt failed. You may need to re-login.", ephemeral=True)
+    except Exception as e:
+        await inter.followup.send(f"❌ Refresh error: {e}", ephemeral=True)
+
 
 
 

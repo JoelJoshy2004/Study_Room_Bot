@@ -6,7 +6,7 @@ Validate the saved session is still good by:
 """
 import base64, json, time
 from bot import config
-from rmit_booker import load_bearer_from_storage
+from web_scraper.rmit_booker import load_bearer_from_storage
 
 def _b64url_decode(s: str) -> bytes:
     s += "=" * (-len(s) % 4)

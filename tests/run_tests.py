@@ -8,7 +8,7 @@ confidence checks that:
 """
 
 from pathlib import Path
-from rmit_booker import (
+from web_scraper.rmit_booker import (
     load_bearer_from_storage,
     build_booking_url,
     is_friend_booking,
