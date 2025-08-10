@@ -1,5 +1,6 @@
-# bot/main.py
-import os, re, asyncio
+
+import os, re, asyncio, random
+from datetime import datetime, timedelta, timezone
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -84,31 +85,108 @@ async def on_ready():
 
 async def refresher_loop():
     """
-    Every 15 minutes, check JWT time remaining. If < 30 min, attempt silent refresh
-    using Playwright. Notify once if refresh fails.
+    Every 30 minutes:
+      1) attempt silent refresh using Playwright
+      2) perform a small 'probe' by scraping and focusing a random room for now→+2h
     """
     warned = False
     while not bot.is_closed():
         try:
-            token = get_current_token()
-            mins = minutes_remaining_from_token(token) if token else 0
-            # print status occasionally for visibility
-            print(f"[session] ~{mins} minutes remaining")
-
-            if mins < 30:
-                ok = await asyncio.to_thread(refresh_with_playwright)
-                if ok:
-                    print("[session] refreshed via Playwright")
-                    warned = False
-                else:
-                    if not warned:
-                        # Optional: you can post a warning to the bound channel here
-                        print("[session] refresh failed; will retry")
-                        warned = True
-            await asyncio.sleep(900)  # 15 minutes
+            ok = await asyncio.to_thread(refresh_with_playwright)
+            if ok:
+                print("[session] periodic refresh OK")
+                warned = False
+            else:
+                if not warned:
+                    print("[session] periodic refresh failed; will retry in 30 min")
+                    warned = True
         except Exception as e:
             print(f"[session] refresher error: {e}")
-            await asyncio.sleep(900)
+        try:
+            # Make a benign query to keep things warm
+            probe_random_room(window_hours=2)
+        except Exception as e:
+            print(f"[probe] error: {e}")
+        # Sleep 30 min
+        await asyncio.sleep(1800)
+
+
+def _ensure_dt(obj):
+    """
+    Return a timezone-aware datetime for `obj`.
+    Supports datetime objects or ISO strings. Falls back to naive->local.
+    """
+    if isinstance(obj, datetime):
+        return obj if obj.tzinfo else obj.replace(tzinfo=timezone.utc).astimezone()
+    # try ISO parse without external deps
+    try:
+        # Basic ISO-like formats: 'YYYY-MM-DDTHH:MM:SS' (optionally with 'Z' or offset)
+        s = str(obj)
+        # Handle trailing Z
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone()
+    except Exception:
+        # last resort: now
+        return datetime.now().astimezone()
+
+
+def probe_random_room(window_hours: int = 2):
+    """
+    Make a lightweight 'poke' to the booking site by scraping the week,
+    picking a random room, and looking at events between now and now+window.
+    """
+    try:
+        summaries, events, warns, title = scrape_week()
+    except Exception as e:
+        print(f"[probe] scrape_week failed: {e}")
+        return
+
+    # Collect room codes from events (best-effort: supports common key names)
+    def _room_of(e):
+        return (
+            e.get("room")
+            or e.get("Room")
+            or e.get("room_code")
+            or e.get("RoomCode")
+            or e.get("location")
+        )
+
+    room_codes = { _room_of(e) for e in events if _room_of(e) }
+    if not room_codes:
+        print("[probe] no room codes discovered from events")
+        return
+
+    # Exclude ignored rooms if present
+    ignored = set(load_json(config.IGNORE_ROOMS_JSON, {"rooms": []}).get("rooms", []))
+    candidates = sorted(rc for rc in room_codes if rc not in ignored) or sorted(room_codes)
+    if not candidates:
+        print("[probe] all discovered rooms are in ignore list")
+        return
+
+    choice = random.choice(candidates)
+
+    now = datetime.now().astimezone()
+    end = now + timedelta(hours=window_hours)
+
+    # Try to count events for the chosen room in [now, end]
+    hits = 0
+    for e in events:
+        if _room_of(e) != choice:
+            continue
+        # Common keys for start time
+        start = e.get("start") or e.get("Start") or e.get("start_time") or e.get("StartTime")
+        if not start:
+            continue
+        dt = _ensure_dt(start)
+        if now <= dt <= end:
+            hits += 1
+
+    print(f"[probe] room {choice}: {hits} events between {now:%Y-%m-%d %H:%M} and {end:%H:%M} (title='{title}')")
+
 
 
 # ------------- Slash Commands -----------------
