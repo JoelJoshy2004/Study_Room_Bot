@@ -138,8 +138,8 @@ async def addfriend(inter: discord.Interaction, student_number: str):
     save_json(config.FRIENDS_JSON, friends)
     await inter.response.send_message(f"✅ Added `{s}` to friends.", ephemeral=True)
 
-@bot.tree.command(name="fetchtime", description="Scrape this week's bookings and render a calendar")
-async def fetchtime(inter: discord.Interaction):
+@bot.tree.command(name="rooms", description="Scrape this week's bookings and render a calendar")
+async def rooms(inter: discord.Interaction):
     if not assert_channel(inter): return
     await inter.response.defer()
 

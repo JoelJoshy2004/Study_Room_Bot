@@ -61,7 +61,7 @@ On startup the bot will:
 * **/ping** — Liveness check.
 * **/addfriend s1234567** — Add a friend’s student number. Validation: `s` + 7 digits (case-insensitive input; stored with lowercase `s`).
 * **/listfriends** — Show the current list of friend IDs.
-* **/fetchtime** — Scrape the selected workweek (Mon–Fri), render a calendar (08:00–20:00), upload it, and warn about bookings in ignored rooms (rendered red and listed as warnings).
+* **/rooms** — Scrape the selected workweek (Mon–Fri), render a calendar (08:00–20:00), upload it, and warn about bookings in ignored rooms (rendered red and listed as warnings).
 * **/ignorerooms add 010.05.68** — Add a room code to the ignore list. Validation: `ddd.dd.dd` (e.g., 080.10.04).
 * **/ignorerooms remove 010.05.68** — Remove a room code from the ignore list.
 * **/ignorerooms list** — Display the ignore list.
@@ -178,7 +178,7 @@ venv/
 Your Discord bot token is missing or wrong. Reset/copy the Bot Token in the Developer Portal, export it again, and restart.
 
 **401/403 when scraping Resource Booker**
-Your RMIT access token expired. Re-run `Storage_Creation/login_and_save.py` (or use `/refreshsession` if enabled). Then retry `/fetchtime`.
+Your RMIT access token expired. Re-run `Storage_Creation/login_and_save.py` (or use `/refreshsession` if enabled). Then retry `/rooms`.
 
 **Matplotlib pops a “Python” window on macOS**
 We force a headless backend (Agg), and close figures after saving. If you still see windows, ensure no `plt.show()` calls exist and you’re on the latest code.
